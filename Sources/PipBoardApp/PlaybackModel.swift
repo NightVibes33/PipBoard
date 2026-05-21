@@ -8,8 +8,10 @@ final class PlaybackModel: ObservableObject {
     @Published var activeVideoURL: URL?
     @Published var browserURL: URL?
     @Published var resolvedStreams: [ResolvedStream] = []
+    @Published var downloads: [DownloadedVideo] = DownloadStore.load()
     @Published var resolveState: ResolveState = .idle
-    @Published var message = "Share, paste, or browse a video link. Direct streams play locally; platform links use your resolver endpoint."
+    @Published var downloadState: DownloadState = .idle
+    @Published var message = "Share, paste, browse, resolve, download, and PiP video links."
 
     private let resolver: VideoResolving
 
@@ -71,6 +73,11 @@ final class PlaybackModel: ObservableObject {
         message = "Playing \(stream.displayTitle). Use the PiP button in the player."
     }
 
+    func play(download: DownloadedVideo) {
+        activeVideoURL = download.localURL
+        message = "Playing downloaded file: \(download.title)."
+    }
+
     func openInBrowser() {
         guard let url = cleanedURL(from: videoURLText) else {
             message = "Enter a valid URL before opening the browser."
@@ -78,6 +85,54 @@ final class PlaybackModel: ObservableObject {
         }
         browserURL = url
         message = "Opened browser fallback for \(url.host ?? url.absoluteString)."
+    }
+
+    func download(stream: ResolvedStream) async {
+        guard stream.url.isDownloadableFileURL else {
+            downloadState = .failed("HLS/manifest streams need the resolver to return a downloadable MP4 or packaged file.")
+            message = "Download unavailable for this stream type. Choose an MP4/progressive stream."
+            return
+        }
+
+        downloadState = .downloading(stream.displayTitle)
+        message = "Downloading \(stream.displayTitle)..."
+
+        do {
+            try DownloadStore.ensureDirectory()
+            let (temporaryURL, response) = try await URLSession.shared.download(from: stream.url)
+            let filename = safeFilename(for: stream)
+            let destination = DownloadStore.downloadsDirectory.appendingPathComponent(filename)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: temporaryURL, to: destination)
+            let byteCount = fileSize(at: destination) ?? response.expectedContentLength
+            let saved = DownloadedVideo(
+                id: UUID(),
+                title: stream.displayTitle,
+                sourceURL: stream.url,
+                localFilename: filename,
+                createdAt: Date(),
+                byteCount: max(byteCount, 0)
+            )
+            downloads.insert(saved, at: 0)
+            DownloadStore.save(downloads)
+            downloadState = .completed(saved.title)
+            message = "Downloaded \(saved.title)."
+        } catch {
+            downloadState = .failed(error.localizedDescription)
+            message = "Download failed: \(error.localizedDescription)"
+        }
+    }
+
+    func deleteDownloads(at offsets: IndexSet) {
+        for index in offsets {
+            DownloadStore.delete(downloads[index])
+        }
+        for index in offsets.sorted(by: >) {
+            downloads.remove(at: index)
+        }
+        DownloadStore.save(downloads)
     }
 
     func saveEndpoint() {
@@ -88,5 +143,28 @@ final class PlaybackModel: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return nil }
         return URL(string: trimmed)
+    }
+
+    private func safeFilename(for stream: ResolvedStream) -> String {
+        let base = stream.displayTitle
+            .replacingOccurrences(of: "[^A-Za-z0-9._-]", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-._"))
+        let fallback = stream.url.deletingPathExtension().lastPathComponent.isEmpty ? "video" : stream.url.deletingPathExtension().lastPathComponent
+        let name = base.isEmpty ? fallback : base
+        let ext = stream.url.pathExtension.isEmpty ? "mp4" : stream.url.pathExtension
+        return "\(name)-\(UUID().uuidString.prefix(8)).\(ext)"
+    }
+
+    private func fileSize(at url: URL) -> Int64? {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        return values?.fileSize.map(Int64.init)
+    }
+}
+
+private extension URL {
+    var isDownloadableFileURL: Bool {
+        guard ["http", "https", "file"].contains(scheme?.lowercased()) else { return false }
+        let ext = pathExtension.lowercased()
+        return ["mp4", "m4v", "mov", "webm", "mp3", "aac", "m4a"].contains(ext)
     }
 }

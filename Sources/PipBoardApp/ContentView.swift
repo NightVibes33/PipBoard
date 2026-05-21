@@ -4,19 +4,42 @@ struct ContentView: View {
     @EnvironmentObject private var model: PlaybackModel
 
     var body: some View {
+        TabView {
+            WatchView()
+                .tabItem { Label("Watch", systemImage: "play.rectangle") }
+            DownloadsView()
+                .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
+            BrowserTabView()
+                .tabItem { Label("Browser", systemImage: "safari") }
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gearshape") }
+        }
+    }
+}
+
+private struct WatchView: View {
+    @EnvironmentObject private var model: PlaybackModel
+
+    var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: 18) {
                     playerArea
-                    inputArea
-                    resolverArea
+                    quickActions
                     streamsArea
-                    browserArea
                     statusArea
                 }
                 .padding()
             }
+            .background(backgroundGradient)
             .navigationTitle("PipBoard")
+            .toolbar {
+                Button {
+                    model.openClipboard()
+                } label: {
+                    Image(systemName: "doc.on.clipboard")
+                }
+            }
         }
     }
 
@@ -24,19 +47,28 @@ struct ContentView: View {
     private var playerArea: some View {
         if let url = model.activeVideoURL {
             PiPPlayerView(url: url)
-                .frame(minHeight: 240)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(minHeight: 260)
+                .clipShape(.rect(cornerRadius: 24))
+                .overlay(alignment: .topLeading) {
+                    Label("Ready for PiP", systemImage: "pip")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .pipGlassControl()
+                        .padding(12)
+                }
         } else {
-            ContentUnavailableView("No Stream Loaded", systemImage: "pip", description: Text("Resolve a link to start PiP playback."))
-                .frame(minHeight: 220)
+            ContentUnavailableView("Resolve a Video", systemImage: "pip", description: Text("Paste a platform link, direct stream, or open the browser fallback."))
+                .frame(minHeight: 260)
+                .pipGlassPanel()
         }
     }
 
-    private var inputArea: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Video Link")
+    private var quickActions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Link")
                 .font(.headline)
-            TextField("https://youtube.com/watch?v=...", text: $model.videoURLText)
+            TextField("YouTube, TikTok, X, Instagram, Reddit, MP4, M3U8...", text: $model.videoURLText)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -46,86 +78,45 @@ struct ContentView: View {
                 Button {
                     Task { await model.resolveFromText() }
                 } label: {
-                    Label(resolveButtonTitle, systemImage: "play.fill")
+                    Label(resolveButtonTitle, systemImage: "sparkles.tv")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.resolveState == .resolving)
 
                 Button {
-                    model.openClipboard()
+                    model.openInBrowser()
                 } label: {
-                    Label("Paste", systemImage: "doc.on.clipboard")
+                    Image(systemName: "safari")
+                        .frame(width: 42, height: 28)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityLabel("Open browser fallback")
             }
-
-            Button {
-                model.openInBrowser()
-            } label: {
-                Label("Open Browser Fallback", systemImage: "safari")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
         }
-    }
-
-    private var resolverArea: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Resolver Endpoint")
-                .font(.headline)
-            TextField("https://your-server.example.com/resolve", text: $model.resolverEndpointText)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { model.saveEndpoint() }
-            Text("Endpoint contract: POST JSON {\"url\":\"...\"}; return {\"streams\":[{\"id\":\"...\",\"url\":\"https://...m3u8\",\"title\":\"...\",\"quality\":\"720p\"}]}")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        .pipGlassPanel()
     }
 
     @ViewBuilder
     private var streamsArea: some View {
         if model.resolvedStreams.isEmpty == false {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Streams")
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Resolved Streams")
+                        .font(.headline)
+                    Spacer()
+                    Text("\(model.resolvedStreams.count)")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .pipGlassControl()
+                }
+
                 ForEach(model.resolvedStreams) { stream in
-                    Button {
-                        model.play(stream: stream)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(stream.displayTitle)
-                                    .lineLimit(1)
-                                if stream.detail.isEmpty == false {
-                                    Text(stream.detail)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Image(systemName: "play.circle")
-                        }
-                    }
-                    .buttonStyle(.bordered)
+                    StreamRow(stream: stream)
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private var browserArea: some View {
-        if let url = model.browserURL {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Browser Fallback")
-                    .font(.headline)
-                BrowserView(url: url)
-                    .frame(minHeight: 360)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
+            .pipGlassPanel()
         }
     }
 
@@ -134,9 +125,187 @@ struct ContentView: View {
             .font(.footnote)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
     }
 
     private var resolveButtonTitle: String {
         model.resolveState == .resolving ? "Resolving" : "Resolve & Play"
     }
+}
+
+private struct StreamRow: View {
+    @EnvironmentObject private var model: PlaybackModel
+    let stream: ResolvedStream
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(stream.displayTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+                    if stream.detail.isEmpty == false {
+                        Text(stream.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    model.play(stream: stream)
+                } label: {
+                    Label("Play", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    Task { await model.download(stream: stream) }
+                } label: {
+                    Label("Download", systemImage: "arrow.down")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(12)
+        .background(.thinMaterial, in: .rect(cornerRadius: 16))
+    }
+}
+
+private struct DownloadsView: View {
+    @EnvironmentObject private var model: PlaybackModel
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if model.downloads.isEmpty {
+                    ContentUnavailableView("No Downloads", systemImage: "arrow.down.circle", description: Text("Download MP4/progressive streams from resolved links."))
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(model.downloads) { download in
+                        Button {
+                            model.play(download: download)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "play.square.stack")
+                                    .font(.title2)
+                                    .foregroundStyle(.tint)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(download.title)
+                                        .font(.headline)
+                                        .lineLimit(2)
+                                    Text(download.detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .onDelete(perform: model.deleteDownloads)
+                }
+            }
+            .navigationTitle("Downloads")
+            .safeAreaInset(edge: .bottom) {
+                if case .downloading(let title) = model.downloadState {
+                    Label("Downloading \(title)", systemImage: "arrow.down.circle")
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .pipGlassControl()
+                        .padding(.bottom, 8)
+                }
+            }
+        }
+    }
+}
+
+private struct BrowserTabView: View {
+    @EnvironmentObject private var model: PlaybackModel
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    TextField("https://site.com/video", text: $model.videoURLText)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(.roundedBorder)
+                    Button {
+                        model.openInBrowser()
+                    } label: {
+                        Image(systemName: "arrow.forward")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(.horizontal)
+
+                if let url = model.browserURL {
+                    BrowserView(url: url)
+                        .clipShape(.rect(cornerRadius: 20))
+                        .padding(.horizontal)
+                } else {
+                    ContentUnavailableView("Browser Fallback", systemImage: "safari", description: Text("Open sites here when direct stream resolution is not available."))
+                        .pipGlassPanel()
+                        .padding()
+                }
+            }
+            .navigationTitle("Browser")
+        }
+    }
+}
+
+private struct SettingsView: View {
+    @EnvironmentObject private var model: PlaybackModel
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Resolver")
+                            .font(.headline)
+                        TextField("https://your-server.example.com/resolve", text: $model.resolverEndpointText)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { model.saveEndpoint() }
+                        Button {
+                            model.saveEndpoint()
+                        } label: {
+                            Label("Save Endpoint", systemImage: "checkmark.circle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .pipGlassPanel()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Endpoint Contract")
+                            .font(.headline)
+                        Text("POST JSON with a url field. Return streams with direct AVPlayer-playable URLs. For downloads, return MP4/progressive file URLs instead of HLS manifests.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .pipGlassPanel()
+                }
+                .padding()
+            }
+            .navigationTitle("Settings")
+        }
+    }
+}
+
+private var backgroundGradient: some View {
+    LinearGradient(
+        colors: [Color.indigo.opacity(0.18), Color.teal.opacity(0.12), Color.clear],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    .ignoresSafeArea()
 }
