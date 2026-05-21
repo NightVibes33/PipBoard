@@ -1,13 +1,50 @@
 # PipBoard
 
-PipBoard is an iOS 26 SwiftUI app scaffold for opening shared video URLs and playing them in Picture in Picture.
+PipBoard is an iOS 26 SwiftUI app scaffold for sideloaded users who want to resolve video links into Picture in Picture playback.
+
+It supports two playback paths:
+
+- Direct media URLs play locally with AVKit PiP: `.mp4`, `.mov`, `.m4v`, `.m3u8`, and other AVPlayer-compatible URLs.
+- Platform URLs such as YouTube, TikTok, X/Twitter, Instagram, Reddit, Twitch, and others can be resolved through a configurable remote resolver endpoint, then played in AVKit PiP when the resolver returns a playable stream.
 
 Important platform limits:
 
 - iOS does not allow a normal app to capture any other app and put it into PiP in real time.
-- PiP is available for video content owned by the app through AVKit, or carefully managed sample-buffer playback.
+- PiP is available for video content owned by the app or streams fed into AVPlayer.
 - Whole-screen capture requires explicit user consent through ReplayKit and cannot bypass protected content, DRM, app sandboxing, or system privacy controls.
-- An unsigned IPA can be built for the `iphoneos` SDK, but a stock real iPhone still needs signing with a valid provisioning profile before installation.
+- An unsigned IPA can be built for the `iphoneos` SDK, but a stock real iPhone still needs signing before installation.
+
+## Resolver Endpoint
+
+For broad platform support, run a backend powered by `yt-dlp` or a compatible extractor. Configure its URL in the app.
+
+PipBoard sends:
+
+```json
+{
+  "url": "https://www.youtube.com/watch?v=..."
+}
+```
+
+The endpoint should return:
+
+```json
+{
+  "title": "Example video",
+  "streams": [
+    {
+      "id": "720p",
+      "title": "Example video",
+      "url": "https://example.com/playlist.m3u8",
+      "quality": "720p",
+      "mimeType": "application/vnd.apple.mpegurl",
+      "isLive": false
+    }
+  ]
+}
+```
+
+The `url` must be directly playable by `AVPlayer`, preferably HLS `.m3u8` or MP4.
 
 ## Build locally on macOS
 
