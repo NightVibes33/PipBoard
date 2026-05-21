@@ -1,0 +1,133 @@
+name: Build signed iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: Main app bundle id that matches the app provisioning profile
+        required: true
+        default: com.example.pipboard
+      share_bundle_id:
+        description: Share extension bundle id that matches its provisioning profile
+        required: true
+        default: com.example.pipboard.share
+      broadcast_bundle_id:
+        description: Broadcast extension bundle id that matches its provisioning profile
+        required: true
+        default: com.example.pipboard.broadcast
+      export_method:
+        description: Export method, usually development or ad-hoc
+        required: true
+        default: development
+        type: choice
+        options:
+          - development
+          - ad-hoc
+
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      KEYCHAIN_PATH: ${{ runner.temp }}/pipboard-signing.keychain-db
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Patch bundle identifiers
+        run: |
+          sed -i '' "s/com.example.pipboard.broadcast/${{ inputs.broadcast_bundle_id }}/g" project.yml Sources/PipBoardBroadcastExtension/Info.plist
+          sed -i '' "s/com.example.pipboard.share/${{ inputs.share_bundle_id }}/g" project.yml Sources/PipBoardShareExtension/Info.plist
+          sed -i '' "s/com.example.pipboard/${{ inputs.bundle_id }}/g" project.yml Sources/PipBoardApp/Info.plist
+
+      - name: Install signing certificate
+        run: |
+          echo "${{ secrets.IOS_P12_BASE64 }}" | base64 --decode > certificate.p12
+          security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+          security import certificate.p12 -P "${{ secrets.IOS_P12_PASSWORD }}" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+
+      - name: Install provisioning profiles
+        run: |
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "${{ secrets.IOS_APP_PROFILE_BASE64 }}" | base64 --decode > app.mobileprovision
+          echo "${{ secrets.IOS_SHARE_PROFILE_BASE64 }}" | base64 --decode > share.mobileprovision
+          echo "${{ secrets.IOS_BROADCAST_PROFILE_BASE64 }}" | base64 --decode > broadcast.mobileprovision
+          for profile in app share broadcast; do
+            uuid=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< "$(security cms -D -i ${profile}.mobileprovision)")
+            cp "${profile}.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/${uuid}.mobileprovision"
+          done
+
+      - name: Read provisioning profile names
+        id: profiles
+        run: |
+          app_name=$(/usr/libexec/PlistBuddy -c 'Print :Name' /dev/stdin <<< "$(security cms -D -i app.mobileprovision)")
+          share_name=$(/usr/libexec/PlistBuddy -c 'Print :Name' /dev/stdin <<< "$(security cms -D -i share.mobileprovision)")
+          broadcast_name=$(/usr/libexec/PlistBuddy -c 'Print :Name' /dev/stdin <<< "$(security cms -D -i broadcast.mobileprovision)")
+          echo "app_profile=$app_name" >> "$GITHUB_OUTPUT"
+          echo "share_profile=$share_name" >> "$GITHUB_OUTPUT"
+          echo "broadcast_profile=$broadcast_name" >> "$GITHUB_OUTPUT"
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Archive signed app
+        run: |
+          xcodebuild \
+            -project PipBoard.xcodeproj \
+            -scheme PipBoard \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            archive \
+            -archivePath build/PipBoard.xcarchive
+
+      - name: Create export options
+        run: |
+          cat > ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>${{ inputs.export_method }}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${{ inputs.bundle_id }}</key>
+              <string>${{ steps.profiles.outputs.app_profile }}</string>
+              <key>${{ inputs.share_bundle_id }}</key>
+              <string>${{ steps.profiles.outputs.share_profile }}</string>
+              <key>${{ inputs.broadcast_bundle_id }}</key>
+              <string>${{ steps.profiles.outputs.broadcast_profile }}</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Export signed IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/PipBoard.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist ExportOptions.plist
+
+      - name: Upload signed IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: PipBoard-signed-ipa
+          path: build/export/*.ipa

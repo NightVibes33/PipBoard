@@ -23,3 +23,17 @@ cp -R build/PipBoard.xcarchive/Products/Applications/PipBoard.app build/Payload/
 ## GitHub Actions
 
 Push this repo to GitHub and run the `Build unsigned iOS IPA` workflow. The artifact will be named `PipBoard-unsigned-ipa`.
+
+## Build an installable signed IPA on GitHub
+
+The unsigned workflow proves the app compiles for `iphoneos`, but an unsigned IPA will not install on a normal real iPhone. For an installable IPA, add these repository secrets and run `Build signed iOS IPA` manually:
+
+- `IOS_P12_BASE64`: Base64 encoded Apple signing certificate `.p12`.
+- `IOS_P12_PASSWORD`: Password for that `.p12`.
+- `KEYCHAIN_PASSWORD`: Temporary CI keychain password.
+- `APPLE_TEAM_ID`: Your Apple Developer Team ID.
+- `IOS_APP_PROFILE_BASE64`: Base64 encoded provisioning profile for the main app bundle id.
+- `IOS_SHARE_PROFILE_BASE64`: Base64 encoded provisioning profile for the share extension bundle id.
+- `IOS_BROADCAST_PROFILE_BASE64`: Base64 encoded provisioning profile for the broadcast extension bundle id.
+
+The bundle IDs entered in the workflow dispatch form must match the three provisioning profiles.
