@@ -1,0 +1,44 @@
+name: PipBoard
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+    MARKETING_VERSION: 1.0
+    CURRENT_PROJECT_VERSION: 1
+targets:
+  PipBoard:
+    type: application
+    platform: iOS
+    sources:
+      - Sources/PipBoardApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.pipboard
+        INFOPLIST_FILE: Sources/PipBoardApp/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - target: PipBoardShareExtension
+      - target: PipBoardBroadcastExtension
+  PipBoardShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Sources/PipBoardShareExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.pipboard.share
+        INFOPLIST_FILE: Sources/PipBoardShareExtension/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+  PipBoardBroadcastExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Sources/PipBoardBroadcastExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.pipboard.broadcast
+        INFOPLIST_FILE: Sources/PipBoardBroadcastExtension/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
