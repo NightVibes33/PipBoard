@@ -97,7 +97,7 @@ struct ResolvedStream: Codable, Identifiable, Equatable {
         self.title = try container.decodeIfPresent(String.self, forKey: .title)
         self.url = decodedURL
         self.quality = inferredQuality
-        self.mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType) ?? container.decodeIfPresent(String.self, forKey: .mimeTypeSnake) ?? mimeType(forExtension: ext ?? decodedURL.pathExtension)
+        self.mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType) ?? container.decodeIfPresent(String.self, forKey: .mimeTypeSnake) ?? inferredResolverMimeType(forExtension: ext ?? decodedURL.pathExtension)
         self.isLive = try container.decodeIfPresent(Bool.self, forKey: .isLive) ?? container.decodeIfPresent(Bool.self, forKey: .isLiveSnake)
     }
 
@@ -155,7 +155,7 @@ struct ResolverResponse: Codable {
     }
 }
 
-private func mimeType(forExtension ext: String?) -> String? {
+private func inferredResolverMimeType(forExtension ext: String?) -> String? {
     switch ext?.lowercased() {
     case "m3u8": return "application/vnd.apple.mpegurl"
     case "mp4", "m4v": return "video/mp4"
