@@ -1,5 +1,7 @@
-.DS_Store
-build/
-DerivedData/
-*.xcworkspace
+*-ipa.zip
+*.ipa
 *.xcodeproj
+*.xcworkspace
+.DS_Store
+DerivedData/
+build/

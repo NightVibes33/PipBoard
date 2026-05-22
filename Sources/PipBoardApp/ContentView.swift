@@ -1,8 +1,7 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @EnvironmentObject private var model: PlaybackModel
-
     var body: some View {
         TabView {
             WatchView()
@@ -19,6 +18,7 @@ struct ContentView: View {
 
 private struct WatchView: View {
     @EnvironmentObject private var model: PlaybackModel
+    @State private var isImportingFile = false
 
     var body: some View {
         NavigationStack {
@@ -34,10 +34,28 @@ private struct WatchView: View {
             .background(backgroundGradient)
             .navigationTitle("PipBoard")
             .toolbar {
-                Button {
-                    model.openClipboard()
-                } label: {
-                    Image(systemName: "doc.on.clipboard")
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        isImportingFile = true
+                    } label: {
+                        Image(systemName: "folder")
+                    }
+                    .accessibilityLabel("Import local file")
+
+                    Button {
+                        model.openClipboard()
+                    } label: {
+                        Image(systemName: "doc.on.clipboard")
+                    }
+                    .accessibilityLabel("Paste and resolve clipboard")
+                }
+            }
+            .fileImporter(isPresented: $isImportingFile, allowedContentTypes: [.movie, .video, .audio, .mpeg4Movie, .quickTimeMovie]) { result in
+                switch result {
+                case .success(let url):
+                    model.importLocalFile(url)
+                case .failure(let error):
+                    model.message = "Import failed: \(error.localizedDescription)"
                 }
             }
         }
@@ -58,7 +76,7 @@ private struct WatchView: View {
                         .padding(12)
                 }
         } else {
-            ContentUnavailableView("Resolve a Video", systemImage: "pip", description: Text("Paste a platform link, direct stream, or open the browser fallback."))
+            ContentUnavailableView("Resolve a Video", systemImage: "pip", description: Text("Paste a platform link, direct stream, import a file, or open the browser fallback."))
                 .frame(minHeight: 260)
                 .pipGlassPanel()
         }
@@ -169,6 +187,16 @@ private struct StreamRow: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .disabled(stream.isDownloadable == false)
+
+                Button {
+                    model.copy(stream: stream)
+                } label: {
+                    Image(systemName: "link")
+                        .frame(width: 34, height: 28)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Copy stream URL")
             }
         }
         .padding(12)
@@ -183,7 +211,7 @@ private struct DownloadsView: View {
         NavigationStack {
             List {
                 if model.downloads.isEmpty {
-                    ContentUnavailableView("No Downloads", systemImage: "arrow.down.circle", description: Text("Download MP4/progressive streams from resolved links."))
+                    ContentUnavailableView("No Downloads", systemImage: "arrow.down.circle", description: Text("Download MP4/progressive streams or import local media files."))
                         .listRowBackground(Color.clear)
                 } else {
                     ForEach(model.downloads) { download in
@@ -288,7 +316,7 @@ private struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Endpoint Contract")
                             .font(.headline)
-                        Text("POST JSON with a url field. Return streams with direct AVPlayer-playable URLs. For downloads, return MP4/progressive file URLs instead of HLS manifests.")
+                        Text("POST JSON with a url field. Return streams or yt-dlp-style formats with direct AVPlayer-playable URLs. For downloads, return MP4/progressive file URLs instead of HLS manifests.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }

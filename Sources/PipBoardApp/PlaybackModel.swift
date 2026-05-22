@@ -74,6 +74,12 @@ final class PlaybackModel: ObservableObject {
     }
 
     func play(download: DownloadedVideo) {
+        guard FileManager.default.fileExists(atPath: download.localURL.path) else {
+            downloads.removeAll { $0.id == download.id }
+            DownloadStore.save(downloads)
+            message = "Downloaded file is missing and was removed from the library."
+            return
+        }
         activeVideoURL = download.localURL
         message = "Playing downloaded file: \(download.title)."
     }
@@ -87,8 +93,43 @@ final class PlaybackModel: ObservableObject {
         message = "Opened browser fallback for \(url.host ?? url.absoluteString)."
     }
 
+    func copy(stream: ResolvedStream) {
+        UIPasteboard.general.string = stream.url.absoluteString
+        message = "Copied stream URL."
+    }
+
+    func importLocalFile(_ url: URL) {
+        let canAccess = url.startAccessingSecurityScopedResource()
+        defer { if canAccess { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            try DownloadStore.ensureDirectory()
+            let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
+            let name = url.deletingPathExtension().lastPathComponent.isEmpty ? "Imported" : url.deletingPathExtension().lastPathComponent
+            let filename = "\(name)-\(UUID().uuidString.prefix(8)).\(ext)"
+            let destination = DownloadStore.downloadsDirectory.appendingPathComponent(filename)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: url, to: destination)
+            let saved = DownloadedVideo(
+                id: UUID(),
+                title: name,
+                sourceURL: url,
+                localFilename: filename,
+                createdAt: Date(),
+                byteCount: fileSize(at: destination) ?? 0
+            )
+            downloads.insert(saved, at: 0)
+            DownloadStore.save(downloads)
+            play(download: saved)
+        } catch {
+            message = "Import failed: \(error.localizedDescription)"
+        }
+    }
+
     func download(stream: ResolvedStream) async {
-        guard stream.url.isDownloadableFileURL else {
+        guard stream.url.pipIsDownloadableFileURL else {
             downloadState = .failed("HLS/manifest streams need the resolver to return a downloadable MP4 or packaged file.")
             message = "Download unavailable for this stream type. Choose an MP4/progressive stream."
             return
@@ -142,7 +183,8 @@ final class PlaybackModel: ObservableObject {
     private func cleanedURL(from text: String) -> URL? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return nil }
-        return URL(string: trimmed)
+        if let url = URL(string: trimmed), url.scheme != nil { return url }
+        return URL(string: "https://\(trimmed)")
     }
 
     private func safeFilename(for stream: ResolvedStream) -> String {
@@ -159,12 +201,3 @@ final class PlaybackModel: ObservableObject {
         let values = try? url.resourceValues(forKeys: [.fileSizeKey])
         return values?.fileSize.map(Int64.init)
     }
-}
-
-private extension URL {
-    var isDownloadableFileURL: Bool {
-        guard ["http", "https", "file"].contains(scheme?.lowercased()) else { return false }
-        let ext = pathExtension.lowercased()
-        return ["mp4", "m4v", "mov", "webm", "mp3", "aac", "m4a"].contains(ext)
-    }
-}
