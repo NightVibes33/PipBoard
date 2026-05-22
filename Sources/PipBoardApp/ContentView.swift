@@ -9,7 +9,7 @@ struct ContentView: View {
             DownloadsView()
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
             BrowserTabView()
-                .tabItem { Label("Browser", systemImage: "safari") }
+                .tabItem { Label("Web", systemImage: "safari") }
             SettingsView()
                 .tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
         }
@@ -130,7 +130,7 @@ private struct WatchView: View {
             .background(.thinMaterial, in: .rect(cornerRadius: 20))
             .clipShape(.rect(cornerRadius: 20))
         } else {
-            ContentUnavailableView("Paste a Link", systemImage: "play.rectangle", description: Text("Direct media opens in the native player. Platform pages open here automatically."))
+            ContentUnavailableView("Paste a Link", systemImage: "play.rectangle", description: Text("Direct files use the native player. Platform links open in the web player."))
                 .frame(minHeight: 300)
                 .pipGlassPanel(cornerRadius: 20)
         }
@@ -168,7 +168,7 @@ private struct WatchView: View {
     }
 
     private var resolveButtonTitle: String {
-        model.resolveState == .resolving ? "Resolving" : "Resolve & Play"
+        model.resolveState == .resolving ? "Opening" : "Play Link"
     }
 }
 
@@ -351,7 +351,7 @@ private struct BrowserTabView: View {
                         .padding()
                 }
             }
-            .navigationTitle("Browser")
+            .navigationTitle("Web Player")
         }
     }
 }

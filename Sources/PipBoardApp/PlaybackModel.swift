@@ -11,7 +11,7 @@ final class PlaybackModel: ObservableObject {
     @Published var downloads: [DownloadedVideo] = DownloadStore.load()
     @Published var resolveState: ResolveState = .idle
     @Published var downloadState: DownloadState = .idle
-    @Published var message = "Share, paste, browse, resolve, download, and PiP video links."
+    @Published var message = "Paste a video link to play it here."
 
     private let resolver: VideoResolving
 
@@ -54,7 +54,7 @@ final class PlaybackModel: ObservableObject {
         resolvedStreams = []
         browserURL = nil
         resolveState = .resolving
-        message = "Resolving \(url.host ?? url.absoluteString)..."
+        message = "Opening \(url.host ?? url.absoluteString)..."
 
         do {
             let streams = try await resolver.resolve(inputURL: url, endpoint: cleanedURL(from: resolverEndpointText))
