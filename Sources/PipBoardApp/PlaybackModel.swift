@@ -201,3 +201,5 @@ final class PlaybackModel: ObservableObject {
         let values = try? url.resourceValues(forKeys: [.fileSizeKey])
         return values?.fileSize.map(Int64.init)
     }
+
+}
