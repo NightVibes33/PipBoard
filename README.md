@@ -11,7 +11,7 @@ PipBoard is an iOS 26 SwiftUI app for sideloaded users who want to resolve video
 - Share, delete, or clear downloaded files from the local library.
 - Import local media files from Files and keep them in the downloads library.
 - Copy resolved stream URLs for debugging or external use.
-- Open web pages in the built-in browser fallback with back, forward, reload, and stop controls when stream resolution fails.
+- Open platform pages such as YouTube in the built-in web player automatically when a native stream is not available.
 - Accept links from the iOS share sheet as URL or plain text, including text that contains a link.
 
 ## Platform Limits
@@ -23,7 +23,7 @@ PipBoard is an iOS 26 SwiftUI app for sideloaded users who want to resolve video
 
 ## Resolver Endpoint
 
-For broad platform support, run a backend powered by `yt-dlp` or a compatible extractor. A minimal Node server is included in `resolver-server/`; it supports `/resolve`, `/health`, and optional `RESOLVER_TOKEN` auth.
+For native AVPlayer streams from platform pages, run an optional backend powered by `yt-dlp` or a compatible extractor. Direct media links and the built-in web player work without configuring this setting. A minimal Node server is included in `resolver-server/`; it supports `/resolve`, `/health`, and optional `RESOLVER_TOKEN` auth.
 
 PipBoard sends:
 

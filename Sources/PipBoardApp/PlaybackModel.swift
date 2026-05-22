@@ -61,10 +61,11 @@ final class PlaybackModel: ObservableObject {
             resolvedStreams = streams
             resolveState = .resolved
             play(stream: streams[0])
+        } catch ResolverError.missingEndpoint(_) {
+            openWebPlayer(for: url, reason: "Opened web player. Add an optional resolver only when you want native streams or downloads for platform links.")
         } catch {
             resolveState = .failed(error.localizedDescription)
-            browserURL = url
-            message = "Resolver failed: \(error.localizedDescription)"
+            openWebPlayer(for: url, reason: "Native resolve failed, so the link opened in the web player.")
         }
     }
 
@@ -89,8 +90,14 @@ final class PlaybackModel: ObservableObject {
             message = "Enter a valid URL before opening the browser."
             return
         }
-        browserURL = url
-        message = "Opened browser fallback for \(url.host ?? url.absoluteString)."
+        openWebPlayer(for: url, reason: "Opened web player for \(url.host ?? url.absoluteString).")
+    }
+
+    private func openWebPlayer(for url: URL, reason: String) {
+        activeVideoURL = nil
+        resolveState = .resolved
+        browserURL = url.pipBrowserPlaybackURL
+        message = reason
     }
 
     func copy(stream: ResolvedStream) {

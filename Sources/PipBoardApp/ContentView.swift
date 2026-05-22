@@ -11,25 +11,27 @@ struct ContentView: View {
             BrowserTabView()
                 .tabItem { Label("Browser", systemImage: "safari") }
             SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
         }
     }
 }
 
 private struct WatchView: View {
     @EnvironmentObject private var model: PlaybackModel
+    @StateObject private var browserState = BrowserState()
     @State private var isImportingFile = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
+                    linkBar
                     playerArea
-                    quickActions
                     streamsArea
                     statusArea
                 }
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
             .background(backgroundGradient)
             .navigationTitle("PipBoard")
@@ -61,58 +63,77 @@ private struct WatchView: View {
         }
     }
 
-    @ViewBuilder
-    private var playerArea: some View {
-        if let url = model.activeVideoURL {
-            PiPPlayerView(url: url)
-                .frame(minHeight: 260)
-                .clipShape(.rect(cornerRadius: 24))
-                .overlay(alignment: .topLeading) {
-                    Label("Ready for PiP", systemImage: "pip")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .pipGlassControl()
-                        .padding(12)
-                }
-        } else {
-            ContentUnavailableView("Resolve a Video", systemImage: "pip", description: Text("Paste a platform link, direct stream, import a file, or open the browser fallback."))
-                .frame(minHeight: 260)
-                .pipGlassPanel()
-        }
-    }
+    private var linkBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                TextField("Paste a video link or direct stream", text: $model.videoURLText)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
 
-    private var quickActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Link")
-                .font(.headline)
-            TextField("YouTube, TikTok, X, Instagram, Reddit, MP4, M3U8...", text: $model.videoURLText)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
+                Button {
+                    model.openInBrowser()
+                } label: {
+                    Image(systemName: "safari")
+                        .frame(width: 34, height: 28)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Open web player")
+            }
 
             HStack(spacing: 10) {
                 Button {
                     Task { await model.resolveFromText() }
                 } label: {
-                    Label(resolveButtonTitle, systemImage: "sparkles.tv")
+                    Label(resolveButtonTitle, systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.resolveState == .resolving)
 
                 Button {
-                    model.openInBrowser()
+                    model.openClipboard()
                 } label: {
-                    Image(systemName: "safari")
-                        .frame(width: 42, height: 28)
+                    Image(systemName: "doc.on.clipboard")
+                        .frame(width: 38, height: 28)
                 }
                 .buttonStyle(.bordered)
-                .accessibilityLabel("Open browser fallback")
+                .accessibilityLabel("Paste clipboard")
             }
         }
-        .pipGlassPanel()
+        .pipGlassPanel(cornerRadius: 18)
+    }
+
+    @ViewBuilder
+    private var playerArea: some View {
+        if let url = model.activeVideoURL {
+            PiPPlayerView(url: url)
+                .frame(minHeight: 300)
+                .clipShape(.rect(cornerRadius: 20))
+                .overlay(alignment: .topLeading) {
+                    Label("Native Player", systemImage: "pip")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .pipGlassControl()
+                        .padding(12)
+                }
+        } else if let url = model.browserURL {
+            VStack(spacing: 0) {
+                BrowserControlBar(state: browserState, titleFallback: url.host ?? "Web Player")
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                BrowserView(url: url, state: browserState)
+            }
+            .frame(minHeight: 420)
+            .background(.thinMaterial, in: .rect(cornerRadius: 20))
+            .clipShape(.rect(cornerRadius: 20))
+        } else {
+            ContentUnavailableView("Paste a Link", systemImage: "play.rectangle", description: Text("Direct media opens in the native player. Platform pages open here automatically."))
+                .frame(minHeight: 300)
+                .pipGlassPanel(cornerRadius: 20)
+        }
     }
 
     @ViewBuilder
@@ -271,6 +292,31 @@ private struct DownloadsView: View {
         }
     }
 }
+private struct BrowserControlBar: View {
+    @ObservedObject var state: BrowserState
+    let titleFallback: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button { state.goBack() } label: { Image(systemName: "chevron.left") }
+                .buttonStyle(.bordered)
+                .disabled(state.canGoBack == false)
+            Button { state.goForward() } label: { Image(systemName: "chevron.right") }
+                .buttonStyle(.bordered)
+                .disabled(state.canGoForward == false)
+            Button { state.isLoading ? state.stopLoading() : state.reload() } label: {
+                Image(systemName: state.isLoading ? "xmark" : "arrow.clockwise")
+            }
+            .buttonStyle(.bordered)
+            Text(state.title.isEmpty ? titleFallback : state.title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer()
+        }
+    }
+}
+
 private struct BrowserTabView: View {
     @StateObject private var browserState = BrowserState()
     @EnvironmentObject private var model: PlaybackModel
@@ -294,7 +340,8 @@ private struct BrowserTabView: View {
                 .padding(.horizontal)
 
                 if let url = model.browserURL {
-                    browserControls
+                    BrowserControlBar(state: browserState, titleFallback: url.host ?? "Browser")
+                        .padding(.horizontal)
                     BrowserView(url: url, state: browserState)
                         .clipShape(.rect(cornerRadius: 20))
                         .padding(.horizontal)
@@ -307,27 +354,6 @@ private struct BrowserTabView: View {
             .navigationTitle("Browser")
         }
     }
-
-    private var browserControls: some View {
-        HStack(spacing: 10) {
-            Button { browserState.goBack() } label: { Image(systemName: "chevron.left") }
-                .buttonStyle(.bordered)
-                .disabled(browserState.canGoBack == false)
-            Button { browserState.goForward() } label: { Image(systemName: "chevron.right") }
-                .buttonStyle(.bordered)
-                .disabled(browserState.canGoForward == false)
-            Button { browserState.isLoading ? browserState.stopLoading() : browserState.reload() } label: {
-                Image(systemName: browserState.isLoading ? "xmark" : "arrow.clockwise")
-            }
-            .buttonStyle(.bordered)
-            Text(browserState.title.isEmpty ? "Browser" : browserState.title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer()
-        }
-        .padding(.horizontal)
-    }
 }
 
 private struct SettingsView: View {
@@ -338,9 +364,9 @@ private struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Resolver")
+                        Text("Optional Resolver")
                             .font(.headline)
-                        TextField("https://your-server.example.com/resolve", text: $model.resolverEndpointText)
+                        TextField("Optional yt-dlp endpoint", text: $model.resolverEndpointText)
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -359,7 +385,7 @@ private struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Endpoint Contract")
                             .font(.headline)
-                        Text("POST JSON with a url field. Return streams or yt-dlp-style formats with direct AVPlayer-playable URLs. For downloads, return MP4/progressive file URLs instead of HLS manifests.")
+                        Text("Leave this empty for direct streams and the built-in web player. Add a yt-dlp endpoint only if you want native playable streams or downloads for platform pages.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -367,7 +393,7 @@ private struct SettingsView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Advanced")
         }
     }
 }
