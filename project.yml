@@ -21,7 +21,9 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
     dependencies:
       - target: PipBoardShareExtension
+        embed: true
       - target: PipBoardBroadcastExtension
+        embed: true
   PipBoardShareExtension:
     type: app-extension
     platform: iOS

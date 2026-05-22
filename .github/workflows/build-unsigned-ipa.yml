@@ -49,6 +49,19 @@ jobs:
             archive \
             -archivePath build/PipBoard.xcarchive
 
+      - name: Validate bundle metadata
+        run: |
+          APP=build/PipBoard.xcarchive/Products/Applications/PipBoard.app
+          check_bundle() {
+            bundle="$1"
+            executable=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$bundle/Info.plist")
+            test -n "$executable"
+            test -x "$bundle/$executable"
+          }
+          check_bundle "$APP"
+          check_bundle "$APP/PlugIns/PipBoardShareExtension.appex"
+          check_bundle "$APP/PlugIns/PipBoardBroadcastExtension.appex"
+
       - name: Package unsigned IPA
         run: |
           mkdir -p build/Payload

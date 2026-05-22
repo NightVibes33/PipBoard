@@ -64,6 +64,10 @@ cp -R build/PipBoard.xcarchive/Products/Applications/PipBoard.app build/Payload/
 (cd build && zip -qry PipBoard-unsigned.ipa Payload)
 ```
 
+## SideStore / AltStore Install Notes
+
+If SideStore reports `Failed to map .../(null): Bad file descriptor`, use an IPA built from the latest workflow. Older builds can produce that error when the app bundle metadata does not expose a valid `CFBundleExecutable`. The workflow now checks the app and embedded extensions before uploading the unsigned IPA.
+
 ## GitHub Actions
 
 Push this repo to GitHub and run the `Build unsigned iOS IPA` workflow. The artifact will be named `PipBoard-unsigned-ipa`.
