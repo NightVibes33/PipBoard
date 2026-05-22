@@ -166,6 +166,15 @@ final class PlaybackModel: ObservableObject {
         }
     }
 
+    func clearDownloads() {
+        for download in downloads {
+            DownloadStore.delete(download)
+        }
+        downloads.removeAll()
+        DownloadStore.save(downloads)
+        message = "Cleared downloads."
+    }
+
     func deleteDownloads(at offsets: IndexSet) {
         for index in offsets {
             DownloadStore.delete(downloads[index])

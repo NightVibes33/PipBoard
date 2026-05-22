@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 const port = Number(process.env.PORT || 8787);
 const ytdlp = process.env.YTDLP || 'yt-dlp';
 const maxBodyBytes = 1024 * 64;
+const authToken = process.env.RESOLVER_TOKEN || "";
 
 function readBody(request) {
   return new Promise((resolve, reject) => {
@@ -105,20 +106,31 @@ function send(response, status, payload) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'POST, OPTIONS',
-    'access-control-allow-headers': 'content-type'
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-headers': 'content-type, x-pipboard-token'
   });
   response.end(JSON.stringify(payload));
 }
 
 createServer(async (request, response) => {
+  const requestURL = new URL(request.url || "/", "http://localhost");
+  if (request.method === "GET" && requestURL.pathname === "/health") {
+    send(response, 200, { ok: true });
+    return;
+  }
+
   if (request.method === 'OPTIONS') {
     send(response, 204, {});
     return;
   }
 
-  if (request.method !== 'POST' || request.url !== '/resolve') {
+  if (request.method !== "POST" || requestURL.pathname !== "/resolve") {
     send(response, 404, { error: 'Use POST /resolve with {"url":"..."}' });
+    return;
+  }
+
+  if (authToken && request.headers["x-pipboard-token"] !== authToken && requestURL.searchParams.get("token") !== authToken) {
+    send(response, 401, { error: "Unauthorized" });
     return;
   }
 

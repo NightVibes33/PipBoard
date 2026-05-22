@@ -51,12 +51,24 @@ final class ShareViewController: SLComposeServiceViewController {
 
     private func extractURL(from item: NSSecureCoding?) -> URL? {
         if let url = item as? URL { return url }
-        if let string = item as? String { return URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        if let string = item as? String { return firstURL(in: string) }
         if let data = item as? Data,
            let string = String(data: data, encoding: .utf8) {
-            return URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines))
+            return firstURL(in: string)
         }
         return nil
+    }
+
+    private func firstURL(in string: String) -> URL? {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let directURL = URL(string: trimmed), directURL.scheme != nil { return directURL }
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let range = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
+            if let match = detector.firstMatch(in: trimmed, options: [], range: range), let url = match.url {
+                return url
+            }
+        }
+        return URL(string: "https://\(trimmed)")
     }
 
     private func openHostApp(with url: URL) {

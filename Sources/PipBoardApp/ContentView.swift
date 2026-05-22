@@ -215,28 +215,49 @@ private struct DownloadsView: View {
                         .listRowBackground(Color.clear)
                 } else {
                     ForEach(model.downloads) { download in
-                        Button {
-                            model.play(download: download)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "play.square.stack")
-                                    .font(.title2)
-                                    .foregroundStyle(.tint)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(download.title)
-                                        .font(.headline)
-                                        .lineLimit(2)
-                                    Text(download.detail)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                        HStack(spacing: 12) {
+                            Button {
+                                model.play(download: download)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "play.square.stack")
+                                        .font(.title2)
+                                        .foregroundStyle(.tint)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(download.title)
+                                            .font(.headline)
+                                            .lineLimit(2)
+                                        Text(download.detail)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
                             }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+
+                            ShareLink(item: download.localURL) {
+                                Image(systemName: "square.and.arrow.up")
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Share downloaded file")
                         }
                     }
                     .onDelete(perform: model.deleteDownloads)
                 }
             }
             .navigationTitle("Downloads")
+            .toolbar {
+                if model.downloads.isEmpty == false {
+                    Button(role: .destructive) {
+                        model.clearDownloads()
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityLabel("Clear downloads")
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 if case .downloading(let title) = model.downloadState {
                     Label("Downloading \(title)", systemImage: "arrow.down.circle")
@@ -250,8 +271,8 @@ private struct DownloadsView: View {
         }
     }
 }
-
 private struct BrowserTabView: View {
+    @StateObject private var browserState = BrowserState()
     @EnvironmentObject private var model: PlaybackModel
 
     var body: some View {
@@ -273,7 +294,8 @@ private struct BrowserTabView: View {
                 .padding(.horizontal)
 
                 if let url = model.browserURL {
-                    BrowserView(url: url)
+                    browserControls
+                    BrowserView(url: url, state: browserState)
                         .clipShape(.rect(cornerRadius: 20))
                         .padding(.horizontal)
                 } else {
@@ -284,6 +306,27 @@ private struct BrowserTabView: View {
             }
             .navigationTitle("Browser")
         }
+    }
+
+    private var browserControls: some View {
+        HStack(spacing: 10) {
+            Button { browserState.goBack() } label: { Image(systemName: "chevron.left") }
+                .buttonStyle(.bordered)
+                .disabled(browserState.canGoBack == false)
+            Button { browserState.goForward() } label: { Image(systemName: "chevron.right") }
+                .buttonStyle(.bordered)
+                .disabled(browserState.canGoForward == false)
+            Button { browserState.isLoading ? browserState.stopLoading() : browserState.reload() } label: {
+                Image(systemName: browserState.isLoading ? "xmark" : "arrow.clockwise")
+            }
+            .buttonStyle(.bordered)
+            Text(browserState.title.isEmpty ? "Browser" : browserState.title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer()
+        }
+        .padding(.horizontal)
     }
 }
 

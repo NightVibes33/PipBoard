@@ -8,10 +8,11 @@ PipBoard is an iOS 26 SwiftUI app for sideloaded users who want to resolve video
 - Resolve platform URLs such as YouTube, TikTok, X/Twitter, Instagram, Reddit, Twitch, and others through a configurable remote resolver endpoint.
 - Decode both PipBoard's `streams` response format and common `yt-dlp`-style `formats` responses.
 - Download progressive file streams such as MP4/MOV/audio into the app's local library.
+- Share, delete, or clear downloaded files from the local library.
 - Import local media files from Files and keep them in the downloads library.
 - Copy resolved stream URLs for debugging or external use.
-- Open web pages in the built-in browser fallback when stream resolution fails.
-- Accept links from the iOS share sheet as URL or plain text.
+- Open web pages in the built-in browser fallback with back, forward, reload, and stop controls when stream resolution fails.
+- Accept links from the iOS share sheet as URL or plain text, including text that contains a link.
 
 ## Platform Limits
 
@@ -22,7 +23,7 @@ PipBoard is an iOS 26 SwiftUI app for sideloaded users who want to resolve video
 
 ## Resolver Endpoint
 
-For broad platform support, run a backend powered by `yt-dlp` or a compatible extractor. A minimal Node server is included in `resolver-server/`.
+For broad platform support, run a backend powered by `yt-dlp` or a compatible extractor. A minimal Node server is included in `resolver-server/`; it supports `/resolve`, `/health`, and optional `RESOLVER_TOKEN` auth.
 
 PipBoard sends:
 
